@@ -1,0 +1,8 @@
+{
+  "api_token": "YOUR_TOKEN",
+  "canvas_domain": "",
+  "current_term_id": <INT>,
+  "course_blacklist": [],
+  "default_download_dir": "",
+  "create_course_dir": true
+}
