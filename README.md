@@ -1,13 +1,19 @@
 # canvas-file-downloader
 
-#### config.json example for PUC.
-``
+Get your token from
+https://cursos.canvas.{your_institution}/profile/settings
+https://cursos.canvas.uc.cl/profile/settings
+`config.json` example for PUC.
+```json
 {
   "api_token": "YOUR_TOKEN",
   "canvas_domain": "https://cursos.canvas.uc.cl",
-  "current_term_id": 273,
-  "course_blacklist": ["ETI195-1", "IMT2220-1", "TTF073-1"],
+  "download_terms_ids": [273],
+  "course_whitelist": [""],
+  "course_blacklist": ["ETI195-1"],
+  "extension_blacklist": [],
+  "extension_whitelist": [],
   "default_download_dir": "",
-  "create_course_dir": false
+  "create_course_dir": true
 }
-``
+```
