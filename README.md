@@ -1,7 +1,7 @@
 # canvas-file-downloader
 
 #### config.json example for PUC.
-```json
+``
 {
   "api_token": "YOUR_TOKEN",
   "canvas_domain": "https://cursos.canvas.uc.cl",
@@ -10,4 +10,4 @@
   "default_download_dir": "",
   "create_course_dir": false
 }
-```
+``
