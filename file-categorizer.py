@@ -12,8 +12,6 @@ CATEGORIES = {
     "Actividades": ["actividad", "actividades"],
 }
 
-directory = argv[1]
-
 
 def categorize_files(directory):
     if not os.path.exists(directory):
@@ -50,4 +48,6 @@ def categorize_files(directory):
 
 
 if __name__ == "__main__":
+    # Usage: python file-categorizer.py <directory>
+    directory = argv[1]
     categorize_files(directory)
