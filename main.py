@@ -145,7 +145,11 @@ def process_single_file(file_data, course_code):
     try:
         if not os.path.exists(original_file_path):
             if original_file_path not in downloaded_files:
-                urlretrieve(download_url, original_file_path)
+                response = requests.get(download_url, stream=True)
+                response.raise_for_status() # Check for HTTP errors
+                with open(original_file_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
                 downloaded_files[original_file_path] = original_file_path
                 with open(".downloaded_files", "w") as f:
                     json.dump(downloaded_files, f)
@@ -154,7 +158,11 @@ def process_single_file(file_data, course_code):
                 return f'File "{display_name}" already exists. File was not downloaded.'
         if not NO_BYTE_CHECKING:
             temp_file_path = f"{original_file_path}.tmp"
-            urlretrieve(download_url, temp_file_path)
+            response = requests.get(download_url, stream=True)
+            response.raise_for_status() # Check for HTTP errors
+            with open(original_file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
 
             if filecmp.cmp(original_file_path, temp_file_path, shallow=False):
                 os.remove(temp_file_path)
