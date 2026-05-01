@@ -74,6 +74,9 @@ parse.add_argument(
 
 CONFIG_FILE = "config.json"
 
+downloaded_files = {}
+
+
 with open(CONFIG_FILE, "r") as f:
     config = json.load(f)
 
@@ -141,8 +144,14 @@ def process_single_file(file_data, course_code):
 
     try:
         if not os.path.exists(original_file_path):
-            urlretrieve(download_url, original_file_path)
-            return f"File downloaded: {original_file_path}"
+            if original_file_path not in downloaded_files:
+                urlretrieve(download_url, original_file_path)
+                downloaded_files[original_file_path] = original_file_path
+                with open(".downloaded_files", "w") as f:
+                    json.dump(downloaded_files, f)
+                return f"File downloaded: {original_file_path}"
+            else:
+                return f'File "{display_name}" already exists. File was not downloaded.'
         if not NO_BYTE_CHECKING:
             temp_file_path = f"{original_file_path}.tmp"
             urlretrieve(download_url, temp_file_path)
@@ -150,11 +159,15 @@ def process_single_file(file_data, course_code):
             if filecmp.cmp(original_file_path, temp_file_path, shallow=False):
                 os.remove(temp_file_path)
                 return f"Skipped {original_file_path} as an identical file exists"
+
             else:
                 unique_name = get_unique_filename(original_file_path)
                 os.rename(temp_file_path, unique_name)
+                downloaded_files[original_file_path] = unique_name
+                with open(".downloaded_files", "w") as f:
+                    json.dump(downloaded_files, f)
                 return f"A file with the same name already exists but its different. Saved as: {unique_name}"
-        return "A file with the same name already exists. File was not downloaded."
+        return f'File "{display_name}" already exists. File was not downloaded.'
 
     except Exception as e:
         return f"Failed to process {display_name}: {e}"
@@ -163,7 +176,7 @@ def process_single_file(file_data, course_code):
 def change_terminal_dir():
     if DEFAULT_DOWNLOAD_DIR != "":
         if not os.path.exists(DEFAULT_DOWNLOAD_DIR):
-            os.makedirs(DEFAULT_DOWNLOAD_DIR)
+            os.mkdir(DEFAULT_DOWNLOAD_DIR)
         os.chdir(DEFAULT_DOWNLOAD_DIR)
         print(f"Download path: {os.getcwd()}")
     else:
@@ -173,6 +186,7 @@ def change_terminal_dir():
 
 
 def connect_to_api(get_from_request="COURSES", COURSE_LIST=None):
+
     if get_from_request == "COURSES":
         r = requests.get(API_URL, headers=HEADERS)
 
@@ -185,8 +199,7 @@ def connect_to_api(get_from_request="COURSES", COURSE_LIST=None):
                     for course in courses
                     if course["enrollment_term_id"] in TERMS_ID
                 ]
-
-            if COURSE_WHITELIST is None:
+            if not COURSE_WHITELIST:
                 COURSE_LIST = [
                     course
                     for course in COURSE_LIST
@@ -247,15 +260,14 @@ def connect_to_api(get_from_request="COURSES", COURSE_LIST=None):
                         executor.submit(process_single_file, file_data, course_code)
                         for file_data in files
                     ]
-
-                    # Print results as each thread finishes
                     for future in concurrent.futures.as_completed(futures):
                         print(future.result())
+
                 if USE_FILE_CATEGORIZER:
                     if CREATE_COURSE_DIR:
-                        categorize_files(f"{DEFAULT_DOWNLOAD_DIR}/{course_code}")
+                        categorize_files(f"{os.path.join(os.getcwd(), course_code)}")
                     else:
-                        categorize_files(DEFAULT_DOWNLOAD_DIR)
+                        categorize_files(os.path.join(os.getcwd()))
             else:
                 print("IDK bro, something went wrong idk what tho")
 
@@ -264,10 +276,20 @@ def connect_to_api(get_from_request="COURSES", COURSE_LIST=None):
 
 if __name__ == "__main__":
     print("Welcome to Canvas Downloader!\nCourses to download: ")
-
+    change_terminal_dir()
+    if os.path.exists(".downloaded_files"):
+        with open(".downloaded_files", "r") as f:
+            downloaded_files = json.load(f)
+    else:
+        with open(".downloaded_files", "w") as f:
+            json.dump(downloaded_files, f)
     courses = connect_to_api("COURSES")
     connect_to_api("FILES", courses)
 
 # TO DO: Add canvas files from subfolders recursively
+# is done, but by using the file categorizer, the program can't categorize files from subfolders
+# Possible solution: Create a downloaded files text file.
+# DONE
+#
 # TO DO: Do the extensions part
 # OPTIONAL: Chrome extension
