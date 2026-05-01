@@ -32,7 +32,7 @@ pip install requests
 2. **Configure the script**:
    Create a `config.json` file in the same directory as the script.
 
-### Example `config.json`
+### Example `config.json` for PUC (Pontificia Universidad Católica de Chile)
 
 ```json
 {
