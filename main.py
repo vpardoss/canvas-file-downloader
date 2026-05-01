@@ -3,7 +3,6 @@ import concurrent.futures  # threads
 import filecmp
 import json
 import os
-from urllib.request import urlretrieve
 
 import requests
 from file_categorizer import categorize_files
