@@ -1,8 +1,11 @@
 {
-  "api_token": "YOUR_TOKEN",
-  "canvas_domain": "",
-  "current_term_id": <INT>,
-  "course_blacklist": [],
+  "api_token": "",
+  "canvas_domain": "https://cursos.canvas.uc.cl",
+  "download_terms_ids": [273],
+  "course_whitelist": ["IMT2220-1", "IMT2230-1"],
+  "course_blacklist": ["ETI195-1"],
+  "extension_blacklist": [],
+  "extension_whitelist": [],
   "default_download_dir": "",
   "create_course_dir": true
 }

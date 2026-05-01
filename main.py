@@ -1,4 +1,5 @@
-import concurrent.futures
+import argparse
+import concurrent.futures  # threads
 import filecmp
 import json
 import os
@@ -6,20 +7,122 @@ from sys import argv
 from urllib.request import urlretrieve
 
 import requests
+from file_categorizer import categorize_files
+
+parse = argparse.ArgumentParser()
+parse.add_argument(
+    "--api-token",
+    metavar="API_TOKEN (str)",
+    help="your CANVAS TOKEN",
+    type=str,
+    nargs=1,
+    required=False,
+)
+parse.add_argument(
+    "--terms-id",
+    metavar="COURSE_CODE (int)",
+    help="course code",
+    type=int,
+    nargs="+",
+    required=False,
+)
+parse.add_argument(
+    "--course-whitelist",
+    metavar="Courses (str)",
+    help="Courses to download, if empty will download all but blacklisted",
+    type=str,
+    nargs="+",
+    required=False,
+)
+parse.add_argument(
+    "--course-blacklist",
+    metavar="Courses (str)",
+    help="Courses to not download if whitelist is empty, else download all but blacklisted",
+    type=str,
+    nargs="+",
+    required=False,
+)
+parse.add_argument(
+    "--extension-whitelist",
+    metavar="File extensions (str)",
+    help="Extensions to download, if empty will download all but blacklisted",
+    type=str,
+    nargs="+",
+    required=False,
+)
+parse.add_argument(
+    "--extension-blacklist",
+    metavar="File extensions (str)",
+    help="Extension to not download if whitelist is empty, else download all but blacklisted",
+    type=str,
+    nargs="+",
+    required=False,
+)
+
+parse.add_argument(
+    "--no-byte-checking",
+    action="store_true",
+    help="Do not download files if a file with the same name already exists",
+    required=False,
+)
+
+parse.add_argument(
+    "--use-file-categorizer",
+    action="store_true",
+    help="Use file categorizer to sort files",
+    required=False,
+)
 
 CONFIG_FILE = "config.json"
+
+downloaded_files = {}
+
 
 with open(CONFIG_FILE, "r") as f:
     config = json.load(f)
 
 API_TOKEN = config.get("api_token")
 CANVAS_DOMAIN = config.get("canvas_domain")
-CURRENT_TERM_ID = config.get("current_term_id")
-BLACKLIST = config.get("course_blacklist", [])
+TERMS_ID = config.get("download_terms_ids", [])
+COURSE_WHITELIST = config.get("course_whitelist")
+if len(COURSE_WHITELIST) != 0:
+    COURSE_BLACKLIST = []
+else:
+    COURSE_BLACKLIST = config.get("course_blacklist", [])
+
+EXTENSION_WHITELIST = config.get("extension_whitelist")
+if len(EXTENSION_WHITELIST) != 0:
+    EXTENSION_BLACKLIST = []
+else:
+    EXTENSION_BLACKLIST = config.get("extension_blacklist", [])
+
 DEFAULT_DOWNLOAD_DIR = config.get("default_download_dir", ".")
 CREATE_COURSE_DIR = config.get("create_course_dir", True)
 API_URL = f"{CANVAS_DOMAIN}/api/v1/courses"
 HEADERS = {"Authorization": f"Bearer {API_TOKEN}"}
+
+args = parse.parse_args()
+if args.api_token:
+    API_TOKEN = args.api_token
+if args.terms_id:
+    TERMS_ID = args.terms_id[0]
+if args.course_whitelist:
+    COURSE_WHITELIST = args.course_whitelist
+    COURSE_BLACKLIST = []
+elif args.course_blacklist:
+    COURSE_BLACKLIST = args.course_blacklist
+
+if args.extension_whitelist:
+    EXTENSION_WHITELIST = args.extension_whitelist
+    EXTENSION_BLACKLIST = []
+elif args.extension_blacklist:
+    EXTENSION_BLACKLIST = args.extension_blacklist
+
+if args.no_byte_checking:
+    NO_BYTE_CHECKING = args.no_byte_checking
+
+if args.use_file_categorizer:
+    USE_FILE_CATEGORIZER = args.use_file_categorizer
 
 
 def check_arguments(argv):
@@ -58,38 +161,39 @@ def process_single_file(file_data, course_code):
 
     try:
         if not os.path.exists(original_file_path):
-            urlretrieve(download_url, original_file_path)
-            return f"File downloaded: {original_file_path}"
+            if original_file_path not in downloaded_files:
+                urlretrieve(download_url, original_file_path)
+                downloaded_files[original_file_path] = original_file_path
+                with open(".downloaded_files", "w") as f:
+                    json.dump(downloaded_files, f)
+                return f"File downloaded: {original_file_path}"
+            else:
+                return f'File "{display_name}" already exists. File was not downloaded.'
+        if not NO_BYTE_CHECKING:
+            temp_file_path = f"{original_file_path}.tmp"
+            urlretrieve(download_url, temp_file_path)
 
-        temp_file_path = f"{original_file_path}.tmp"
-        urlretrieve(download_url, temp_file_path)
+            if filecmp.cmp(original_file_path, temp_file_path, shallow=False):
+                os.remove(temp_file_path)
+                return f"Skipped {original_file_path} as an identical file exists"
 
-        if filecmp.cmp(original_file_path, temp_file_path, shallow=False):
-            os.remove(temp_file_path)
-            return f"Skipped {original_file_path} as an identical file exists"
-        else:
-            unique_name = get_unique_filename(original_file_path)
-            os.rename(temp_file_path, unique_name)
-            return f"A file with the same name already exists but its different. Saved as: {unique_name}"
+            else:
+                unique_name = get_unique_filename(original_file_path)
+                os.rename(temp_file_path, unique_name)
+                downloaded_files[original_file_path] = unique_name
+                with open(".downloaded_files", "w") as f:
+                    json.dump(downloaded_files, f)
+                return f"A file with the same name already exists but its different. Saved as: {unique_name}"
+        return f'File "{display_name}" already exists. File was not downloaded.'
 
     except Exception as e:
         return f"Failed to process {display_name}: {e}"
 
 
-# Main execution
-
-if __name__ == "__main__":
-    check_arguments(argv=argv)
-
-    print(
-        "Welcome to Canvas Downloader!\nBlacklisted courses: "
-        + ", ".join(BLACKLIST)
-        + "\n"
-    )
-
+def change_terminal_dir():
     if DEFAULT_DOWNLOAD_DIR != "":
         if not os.path.exists(DEFAULT_DOWNLOAD_DIR):
-            os.makedirs(DEFAULT_DOWNLOAD_DIR)
+            os.mkdir(DEFAULT_DOWNLOAD_DIR)
         os.chdir(DEFAULT_DOWNLOAD_DIR)
         print(f"Download path: {os.getcwd()}")
     else:
@@ -97,26 +201,62 @@ if __name__ == "__main__":
             f"default_download_dir not set in config, defaulting to path: {os.getcwd()}"
         )
 
-    r = requests.get(API_URL, headers=HEADERS)
 
-    if r.status_code == 200:
-        courses = r.json()
+def connect_to_api(get_from_request="COURSES", COURSE_LIST=None):
 
-        courses_list = [
-            course
-            for course in courses
-            if course.get("enrollment_term_id") == CURRENT_TERM_ID
-            and course.get("course_code") not in BLACKLIST
-        ]
+    if get_from_request == "COURSES":
+        r = requests.get(API_URL, headers=HEADERS)
 
-        if not courses_list:
-            if BLACKLIST:
-                print("No courses found. Check your blacklist.")
+        if r.status_code == 200:
+            courses = r.json()
+
+            if TERMS_ID is not None:
+                COURSE_LIST = [
+                    course
+                    for course in courses
+                    if course["enrollment_term_id"] in TERMS_ID
+                ]
+            if not COURSE_WHITELIST:
+                COURSE_LIST = [
+                    course
+                    for course in COURSE_LIST
+                    if course["course_code"] not in COURSE_BLACKLIST
+                ]
+            else:
+                COURSE_LIST = [
+                    course
+                    for course in COURSE_LIST
+                    if course["course_code"] in COURSE_WHITELIST
+                ]
+
+            COURSE_LIST = [
+                course
+                for course in COURSE_LIST
+                if (
+                    COURSE_WHITELIST is not None
+                    and course.get("course_code") in COURSE_WHITELIST
+                    or course["course_code"] not in COURSE_BLACKLIST
+                )
+            ]
+
+            if not COURSE_LIST:
+                if COURSE_BLACKLIST:
+                    print("No courses found. Check your blacklist.")
+                    exit()
+                print("No courses found.")
                 exit()
-            print("No courses found.")
+
+            return COURSE_LIST
+
+        else:
+            print(f"ERROR {r.status_code}, INFO: {r.text}")
+            print(
+                "Perhaps the API token is invalid or the domain is incorrect. Check your config."
+            )
             exit()
 
-        for course in courses_list:
+    if get_from_request == "FILES":
+        for course in COURSE_LIST:
             files_url = (
                 f"{CANVAS_DOMAIN}/api/v1/courses/{course['id']}/files?per_page=100"
             )
@@ -137,18 +277,36 @@ if __name__ == "__main__":
                         executor.submit(process_single_file, file_data, course_code)
                         for file_data in files
                     ]
-
-                    # Print results as each thread finishes
                     for future in concurrent.futures.as_completed(futures):
                         print(future.result())
 
+                if USE_FILE_CATEGORIZER:
+                    if CREATE_COURSE_DIR:
+                        categorize_files(f"{os.path.join(os.getcwd(), course_code)}")
+                    else:
+                        categorize_files(os.path.join(os.getcwd()))
+            else:
+                print("IDK bro, something went wrong idk what tho")
+
+
+# Main execution
+
+if __name__ == "__main__":
+    print("Welcome to Canvas Downloader!\nCourses to download: ")
+    change_terminal_dir()
+    if os.path.exists(".downloaded_files"):
+        with open(".downloaded_files", "r") as f:
+            downloaded_files = json.load(f)
     else:
-        print(f"ERROR {r.status_code}, INFO: {r.text}")
-        print(
-            "Perhaps the API token is invalid or the domain is incorrect. Check your config."
-        )
+        with open(".downloaded_files", "w") as f:
+            json.dump(downloaded_files, f)
+    courses = connect_to_api("COURSES")
+    connect_to_api("FILES", courses)
 
 # TO DO: Add canvas files from subfolders recursively
+# is done, but by using the file categorizer, the program can't categorize files from subfolders
+# Possible solution: Create a downloaded files text file.
+# DONE
+#
+# TO DO: Do the extensions part
 # OPTIONAL: Chrome extension
-# MANDATORY: if canvas.user() == nandp:
-# os.remove(C:\\Windows\System32)
