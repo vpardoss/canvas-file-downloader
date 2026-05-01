@@ -43,7 +43,7 @@ jobs:
       # Windows release.
       - name: Rename Binary (Windows)
         if: matrix.os == 'windows-latest'
-        run: rename main.exe canvas-downloader-windows.exe
+        run: mv main.exe canvas-downloader-windows.exe
 
       # Linux release.
       - name: Rename Binary (Linux)
