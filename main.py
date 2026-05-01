@@ -3,7 +3,6 @@ import concurrent.futures  # threads
 import filecmp
 import json
 import os
-from sys import argv
 from urllib.request import urlretrieve
 
 import requests
@@ -123,22 +122,6 @@ if args.no_byte_checking:
 
 if args.use_file_categorizer:
     USE_FILE_CATEGORIZER = args.use_file_categorizer
-
-
-def check_arguments(argv):
-    print(argv)
-
-
-def courses_filter(list_to_check, whitelist, blacklist):
-    if whitelist:
-        return whitelist
-
-    if not blacklist:
-        return list_to_check
-
-    # Sets remove duplicates as well so it's a win win situation, time complexity O(N+M)
-    # Where N = number of elements in list_to_check and M = number of elements in blacklist
-    return list(set(list_to_check) - set(blacklist))
 
 
 def get_unique_filename(filepath, original_filepath=None, counter=1):
