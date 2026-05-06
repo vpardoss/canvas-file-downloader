@@ -37,7 +37,7 @@ pip install requests
 ```json
 {
   "api_token": "YOUR_API_TOKEN_HERE",
-  "canvas_domain": "[https://cursos.canvas.uc.cl](https://cursos.canvas.uc.cl)",
+  "canvas_domain": "https://cursos.canvas.uc.cl",
   "download_terms_ids": [273],
   "course_whitelist": [],
   "course_blacklist": [],
